@@ -1,60 +1,64 @@
-# -*- coding: utf-8 -*-
-
 """
-Based on https://github.com/mitsuhiko/werkzeug/blob/master/werkzeug/local.py
+Per-request storage backed by ``contextvars.ContextVar``.
 
-Copyright (c) 2013 by the Werkzeug Team, see
-https://github.com/mitsuhiko/werkzeug/blob/master/AUTHORS for more details.
+Replaces the older threadlocal/greenlet-keyed implementation: under ASGI, many
+concurrent requests share the same OS thread, so a thread-keyed store would
+mix request IDs across in-flight requests. ``ContextVar`` is scoped to the
+current asyncio task (or sync call stack), which is the correct boundary.
 """
 
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import annotations
 
-__all__ = ['Local', 'release_local']
+from contextvars import ContextVar, Token
 
-try:
-    from greenlet import getcurrent as get_ident
-except ImportError:
-    try:
-        # noinspection PyCompatibility
-        from thread import get_ident
-    except ImportError:
-        # noinspection PyCompatibility
-        from _thread import get_ident
+__all__ = ["get", "set", "reset", "Local", "release_local"]
+
+_request_id_var: ContextVar[str] = ContextVar("request_id", default="")
 
 
-class Local(object):
-    __slots__ = ('__storage__', '__ident_func__')
+def get() -> str:
+    return _request_id_var.get()
 
-    def __init__(self):
-        object.__setattr__(self, '__storage__', {})
-        object.__setattr__(self, '__ident_func__', get_ident)
 
-    def __iter__(self):
-        return iter(self.__storage__.items())
+def set(value: str) -> Token[str]:  # noqa: A001 - public API name predates builtin shadow lint
+    return _request_id_var.set(value)
 
-    def __release_local__(self):
-        self.__storage__.pop(self.__ident_func__(), None)
 
-    def __getattr__(self, name):
-        try:
-            return self.__storage__[self.__ident_func__()][name]
-        except KeyError:
+def reset(token: Token[str]) -> None:
+    _request_id_var.reset(token)
+
+
+class Local:
+    """
+    Backwards-compatible shim for the pre-2.0 ``request_id.local`` object.
+
+    Old code did ``local.request_id = "abc"`` / ``local.request_id``. We map
+    those reads and writes onto the module-level ContextVar so existing
+    callers keep working. New code should use ``get()`` / ``set()`` /
+    ``reset()`` directly.
+    """
+
+    __slots__ = ()
+
+    def __getattr__(self, name: str) -> str:
+        if name != "request_id":
             raise AttributeError(name)
-
-    def __setattr__(self, name, value):
-        ident = self.__ident_func__()
-        storage = self.__storage__
-        try:
-            storage[ident][name] = value
-        except KeyError:
-            storage[ident] = {name: value}
-
-    def __delattr__(self, name):
-        try:
-            del self.__storage__[self.__ident_func__()][name]
-        except KeyError:
+        value = _request_id_var.get()
+        if not value:
             raise AttributeError(name)
+        return value
+
+    def __setattr__(self, name: str, value: str) -> None:
+        if name != "request_id":
+            raise AttributeError(name)
+        _request_id_var.set(value)
+
+    def __delattr__(self, name: str) -> None:
+        if name != "request_id":
+            raise AttributeError(name)
+        _request_id_var.set("")
 
 
-def release_local(local):
-    local.__release_local__()
+def release_local(local: Local) -> None:
+    """Clear the request_id for the current context."""
+    _request_id_var.set("")

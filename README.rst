@@ -2,6 +2,25 @@
 django-request-id
 =================
 
+.. attention::
+
+   **Fork notice** — this is a fork of `nigma/django-request-id
+   <https://github.com/nigma/django-request-id>`_ that adds first-class
+   support for async Django (ASGI views, dual-mode middleware,
+   ``contextvars``-based request ID propagation that is safe across
+   concurrent ``asyncio`` tasks), plus modernized packaging
+   (``pyproject.toml``, ``uv``, ``ruff``, Python 3.12+, Django 5.1+).
+   Most of the updating work was done with Claude with some manual adjustments.
+
+   Unless explicitly stated otherwise, **this fork is not actively
+   maintained**. You are welcome to use it as-is, but no further feature
+   development is planned. Only security issues will be addressed; bug
+   reports and feature requests will generally not be acted on. If you
+   need ongoing maintenance, please fork it.
+
+   Badges and PyPI links below refer to the upstream package and do not
+   describe the state of this fork.
+
 
 .. image:: https://img.shields.io/pypi/l/dj-cmd.svg
     :target: https://raw.githubusercontent.com/nigma/django-request-id/master/LICENSE

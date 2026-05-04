@@ -1,27 +1,22 @@
-# -*- coding: utf-8 -*-
-
-from __future__ import absolute_import, division, print_function, unicode_literals
+from __future__ import annotations
 
 from uuid import uuid4
 
-from .local import Local, release_local  # NOQA
+from .local import Local, release_local  # noqa: F401  (re-exported for back-compat)
 
-__version__ = '1.0.0'
-
-default_app_config = 'request_id.apps.RequestIdConfig'
+__version__ = "2.0.0"
 
 local = Local()
 
 
-def generate_request_id():
+def generate_request_id() -> str:
     return str(uuid4())
 
 
-def get_current_request_id():
-    try:
-        return local.request_id
-    except AttributeError:
-        return ''
+def get_current_request_id() -> str:
+    from .local import get as _get
+
+    return _get()
 
 
-__all__ = ['get_current_request_id']
+__all__ = ["generate_request_id", "get_current_request_id", "local", "release_local"]

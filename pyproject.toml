@@ -1,0 +1,91 @@
+[project]
+name = "django-request-id"
+version = "2.0.0"
+description = "Augment each request with a unique id for logging purposes (async-aware fork)"
+readme = "README.rst"
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Filip Wasilewski", email = "en@ig.ma" },
+]
+maintainers = [
+    { name = "Adam Huganir", email = "adam@redshred.com" },
+]
+keywords = ["django", "request-id", "async", "asgi", "logging"]
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Environment :: Web Environment",
+    "Framework :: Django",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+]
+dependencies = [
+    "django>=5.1",
+    "asgiref>=3.8",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "pytest-django>=4.9",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.6",
+]
+demo = [
+    "uvicorn[standard]>=0.30",
+]
+
+[project.urls]
+Homepage = "https://github.com/redshred/django-request-id"
+Source = "https://github.com/redshred/django-request-id"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["request_id"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "request_id",
+    "tests",
+    "README.rst",
+    "AUTHORS.rst",
+    "LICENSE",
+]
+
+[tool.ruff]
+line-length = 119
+target-version = "py312"
+extend-exclude = ["docs"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "I",
+    "UP",
+    "B",
+    "SIM",
+    "ASYNC",
+    "DJ",
+]
+ignore = ["E402"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E501"]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "tests.settings"
+asyncio_mode = "auto"
+python_files = ["test_*.py"]
+testpaths = ["tests"]

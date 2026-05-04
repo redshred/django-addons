@@ -25,16 +25,19 @@ pip-log.txt
 # Unit test / coverage reports
 .coverage
 .tox
+.pytest_cache
+.ruff_cache
 nosetests.xml
 
 # Translations
 *.mo
 
-# Mr Developer
+# Editor / IDE
 .mr.developer.cfg
 .project
 .pydevproject
 .idea
+.vscode
 
 # Complexity
 output/*.html
@@ -43,4 +46,9 @@ output/*/index.html
 # Sphinx
 docs/_build
 
+# Local DBs
 *.sqlite
+
+# Environments
+.venv
+.python-version
