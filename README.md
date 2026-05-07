@@ -13,6 +13,7 @@ a single virtualenv, lockfile, and tooling config (ruff, dev deps).
 | Directory | Package | Description |
 | --- | --- | --- |
 | [`django-request-id/`](django-request-id/) | `django-request-id` | Async-aware middleware that augments each request with a unique id for logging. |
+| [`django-keycloak/`](django-keycloak/) | `django-keycloak` | Async-aware Keycloak/OIDC integration for Django. Hard fork of [skamansam/django-keycloak](https://github.com/skamansam/django-keycloak), being stripped down. |
 
 ## Working in the workspace
 

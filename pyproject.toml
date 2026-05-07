@@ -1,5 +1,5 @@
 [tool.uv.workspace]
-members = ["django-request-id"]
+members = ["django-request-id", "django-keycloak"]
 
 [tool.uv]
 package = false

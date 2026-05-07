@@ -10,6 +10,10 @@ includes:
     taskfile: ./django-request-id/Taskfile.yaml
     dir: ./django-request-id
     aliases: [rid]
+  keycloak:
+    taskfile: ./django-keycloak/Taskfile.yaml
+    dir: ./django-keycloak
+    aliases: [kc]
 
 
 tasks:
@@ -52,11 +56,13 @@ tasks:
     desc: Run tests for every workspace member
     cmds:
       - task: request-id:test
+      - task: keycloak:test
 
   build:
     desc: Build distribution artifacts for every workspace member
     cmds:
       - task: request-id:build
+      - task: keycloak:build
 
   check:
     desc: Run all quality checks (lint + test)
@@ -74,6 +80,7 @@ tasks:
     silent: true
     cmds:
       - task: request-id:clean
+      - task: keycloak:clean
       - cmd: rm -rf .pytest_cache .ruff_cache
         platforms: [linux, darwin]
       - cmd: powershell -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '.pytest_cache','.ruff_cache'"

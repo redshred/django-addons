@@ -1,0 +1,63 @@
+version: "3"
+
+
+vars:
+  PACKAGE_NAME: django_keycloak
+  DIST_DIR: "{{.ROOT_DIR}}/django-keycloak/dist"
+
+
+tasks:
+  default:
+    desc: Show available tasks
+    silent: true
+    cmds:
+      - task --list
+
+  deps:
+    desc: Sync workspace dependencies into .venv
+    cmds:
+      - task: :deps
+
+  test:
+    desc: Run the django-keycloak test suite
+    deps: [deps]
+    cmds:
+      - uv run --project "{{.ROOT_DIR}}" pytest {{.PACKAGE_NAME}}/tests
+
+  test:coverage:
+    desc: Run tests with a coverage report
+    deps: [deps]
+    cmds:
+      - uv run --project "{{.ROOT_DIR}}" --with coverage pytest --cov={{.PACKAGE_NAME}} --cov-report=term-missing {{.PACKAGE_NAME}}/tests
+
+  lint:
+    desc: Lint django-keycloak sources
+    deps: [deps]
+    cmds:
+      - uv run --project "{{.ROOT_DIR}}" ruff check .
+
+  fmt:
+    desc: Format django-keycloak sources and auto-fix lint
+    deps: [deps]
+    cmds:
+      - uv run --project "{{.ROOT_DIR}}" ruff format .
+      - uv run --project "{{.ROOT_DIR}}" ruff check --fix .
+
+  build:
+    desc: Build sdist and wheel into dist/
+    deps: [deps]
+    generates:
+      - "{{.DIST_DIR}}/*"
+    cmds:
+      - uv build --out-dir "{{.DIST_DIR}}"
+
+  clean:
+    desc: Remove build artifacts and caches for this addon
+    silent: true
+    cmds:
+      - cmd: |-
+          rm -rf "{{.DIST_DIR}}" .pytest_cache .ruff_cache .coverage
+          find . -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
+        platforms: [linux, darwin]
+      - cmd: powershell -Command "Remove-Item -Recurse -Force -ErrorAction SilentlyContinue '{{.DIST_DIR}}','.pytest_cache','.ruff_cache','.coverage'"
+        platforms: [windows]

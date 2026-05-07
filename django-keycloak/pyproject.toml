@@ -1,49 +1,60 @@
-[tool.poetry]
-name = "django42-keycloak"
-version = "0.2.9"
-description = "Integrate Keycloak with Django 4.2+"
-homepage = 'https://github.com/skamansam/django-keycloak'
-repository = 'https://github.com/skamansam/django-keycloak'
-keywords = ["django", "keycloak", "auth", "django42", "python311"]
-license = "MIT"
-authors = [
-  "Samuel C. Tyler <skamansam@gmail.com>",
-  "Ahmad Dabo <dabo.cs@gmail.com>",
-  "Peter Slump <peter@yarf.nl>",
-]
+[project]
+name = "django-keycloak"
+version = "0.3.0"
+description = "Async-aware Django integration for Keycloak (Redshred fork of skamansam/django-keycloak)"
 readme = "README.rst"
-packages = [{include = "django_keycloak"}]
+license = { file = "LICENSE" }
+requires-python = ">=3.12"
+authors = [
+    { name = "Peter Slump", email = "peter@yarf.nl" },
+    { name = "Ahmad Dabo", email = "dabo.cs@gmail.com" },
+    { name = "Samuel C. Tyler", email = "skamansam@gmail.com" },
+]
+maintainers = [
+    { name = "Adam Huganir", email = "adam@redshred.com" },
+]
+keywords = ["django", "keycloak", "auth", "async", "asgi", "oidc"]
 classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Environment :: Web Environment",
     "Framework :: Django",
-    "Framework :: Django :: 4.2",
-    "Programming Language :: Python :: 3",
+    "Framework :: Django :: 5.1",
+    "Framework :: Django :: 5.2",
+    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development",
+    "Topic :: Software Development :: Libraries :: Python Modules",
 ]
-[tool.poetry.urls]
-"Bug Tracker" = "https://github.com/skamansam/django-keycloak/issues"
+dependencies = [
+    "django>=5.1",
+    "python-keycloak-client>=0.2.3",
+]
 
-[tool.poe.tasks]
-test         = "pytest --cov=my_app"                         # a simple command task
-serve.script = "my_app.service:run(debug=True)"              # python script based task
-tunnel.shell = "ssh -N -L 0.0.0.0:8080:$PROD:8080 $PROD &"   # (posix) shell based task
-
-
-[tool.poetry.dependencies]
-python = ">=3.11"
-Django = ">=4.2"
-python-keycloak-client = "^0.2.3"
-
-[tool.poetry.group.dev.dependencies]
-django-dynamic-fixtures = "^0.2.1"
-
-[tool.poetry.group.test.dependencies]
-pytest-django = "^4.5.2"
-pytest-cov = "^4.1.0"
-mock = "^5.1.0"
-factory-boy = "^3.3.0"
-freezegun = "^1.2.2"
+[project.urls]
+Homepage = "https://github.com/redshred/django-addons"
+Source = "https://github.com/redshred/django-addons"
+"Bug Tracker" = "https://github.com/redshred/django-addons/issues"
+"Upstream" = "https://github.com/skamansam/django-keycloak"
 
 [build-system]
-requires = ["poetry-core"]
-build-backend = "poetry.core.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["django_keycloak"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "django_keycloak",
+    "README.rst",
+    "LICENSE",
+]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "django_keycloak.tests.settings"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+testpaths = ["django_keycloak/tests"]
