@@ -17,5 +17,3 @@ class Fixture(BaseFixture):
             client_id='resource-provider',
             secret='f40347aa-728d-4599-aba9-26f4a69d6f1e'
         )
-
-

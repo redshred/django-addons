@@ -6,10 +6,10 @@ It consists out of three applications:
  - identity server (Keycloak)
  - resource provider (small web application)
  - resource provider (API accessible)
- 
+
 When running the application everything is pre-configured and ready to use.
 
-Keycloak version 3.4.3-Final is used since that is the latest version which is 
+Keycloak version 3.4.3-Final is used since that is the latest version which is
 commercially supported by Red Hat (SSO).
 
 You can find the docs for this version here: https://www.keycloak.org/archive/documentation-3.4.html
@@ -27,7 +27,7 @@ Installation of Docker and Docker-compose is required
 Run:
 
     $ docker-compose up
-    
+
 In your browser visit: https://resource-provider.localhost.yarf.nl/
 
 Accept the insecure certificate, or add the CA which you can find in `nginx/certs/ca.pem` to your trusted CA's.

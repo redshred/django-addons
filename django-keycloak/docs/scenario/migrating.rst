@@ -32,4 +32,3 @@ one.
 
 
 .. _synchronize_permissions:
-

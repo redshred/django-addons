@@ -49,7 +49,7 @@ class KeycloakAuthorizationBase(object):
         # FIXME: UNCOMMENT CODE BELLOW AND FIX ENTTITLMENT BUG
         # https://issues.redhat.com/browse/KEYCLOAK-8353
 
-        
+
         if not hasattr(user_obj, 'oidc_profile'):
             return set()
 
