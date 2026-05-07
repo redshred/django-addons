@@ -1,89 +1,85 @@
 import re
 
+from asgiref.sync import iscoroutinefunction
 from django.conf import settings
-from django.contrib.auth import authenticate
-from django.utils.deprecation import MiddlewareMixin
-from django.utils.functional import SimpleLazyObject
+from django.contrib.auth import aauthenticate
+from django.utils.decorators import sync_and_async_middleware
 
-from django_keycloak.models import Realm
+from django_keycloak import conf
 from django_keycloak.response import HttpResponseNotAuthorized
 
 
-def get_realm(request):
-    if not hasattr(request, "_cached_realm"):
-        request._cached_realm = Realm.objects.first()
-    return request._cached_realm
+@sync_and_async_middleware
+def KeycloakStatelessBearerAuthenticationMiddleware(get_response):
+    """
+    Validate ``Authorization: Bearer <Keycloak access token>`` on every
+    request except those matching ``KEYCLOAK_BEARER_AUTHENTICATION_EXEMPT_PATHS``.
+    Sets ``request.user`` to the linked Django user on success; returns 401
+    otherwise.
+    """
 
+    async_capable = iscoroutinefunction(get_response)
 
-class BaseKeycloakMiddleware(MiddlewareMixin):
-    set_session_state_cookie = True
-
-    def process_request(self, request):
-        request.realm = SimpleLazyObject(lambda: get_realm(request))
-
-    def process_response(self, request, response):
-        if self.set_session_state_cookie:
-            return self._set_session_state_cookie(request, response)
-        return response
-
-    def _set_session_state_cookie(self, request, response):
-        if not request.user.is_authenticated or not hasattr(
-            request.user, "oidc_profile"
-        ):
-            return response
-
-        jwt = request.user.oidc_profile.jwt
-        if not jwt:
-            return response
-
-        cookie_name = getattr(
-            settings, "KEYCLOAK_SESSION_STATE_COOKIE_NAME", "session_state"
-        )
-        response.set_cookie(
-            cookie_name,
-            value=jwt["session_state"],
-            expires=request.user.oidc_profile.refresh_expires_before,
-            httponly=False,
-        )
-        return response
-
-
-class KeycloakStatelessBearerAuthenticationMiddleware(BaseKeycloakMiddleware):
-    """Accept a Keycloak access token via ``Authorization: Bearer ...``."""
-
-    set_session_state_cookie = False
-    header_key = "HTTP_AUTHORIZATION"
-
-    def process_request(self, request):
-        super().process_request(request=request)
-
+    def _exempt(request) -> bool:
         exempt_paths = getattr(
             settings, "KEYCLOAK_BEARER_AUTHENTICATION_EXEMPT_PATHS", None
         )
-        if exempt_paths:
-            path = request.path_info.lstrip("/")
-            if any(re.match(m, path) for m in exempt_paths):
-                return
+        if not exempt_paths:
+            return False
+        path = request.path_info.lstrip("/")
+        return any(re.match(m, path) for m in exempt_paths)
 
-        if self.header_key not in request.META:
-            return HttpResponseNotAuthorized(
-                attributes={"realm": request.realm.name}
-            )
-
+    def _extract_token(request) -> str | None:
+        header = request.META.get("HTTP_AUTHORIZATION")
+        if not header:
+            return None
         try:
-            scheme, token = request.META[self.header_key].split(" ", 1)
+            scheme, token = header.split(" ", 1)
         except ValueError:
-            return HttpResponseNotAuthorized(
-                attributes={"realm": request.realm.name}
-            )
+            return None
         if scheme.lower() != "bearer":
-            return HttpResponseNotAuthorized(
-                attributes={"realm": request.realm.name}
-            )
+            return None
+        return token
+
+    def _unauthorized() -> HttpResponseNotAuthorized:
+        return HttpResponseNotAuthorized(
+            attributes={"realm": conf.realm_name()}
+        )
+
+    if async_capable:
+
+        async def middleware(request):
+            if _exempt(request):
+                return await get_response(request)
+
+            token = _extract_token(request)
+            if token is None:
+                return _unauthorized()
+
+            user = await aauthenticate(request=request, access_token=token)
+            if user is None:
+                return _unauthorized()
+
+            request.user = user
+            return await get_response(request)
+
+        return middleware
+
+    def middleware(request):
+        if _exempt(request):
+            return get_response(request)
+
+        token = _extract_token(request)
+        if token is None:
+            return _unauthorized()
+
+        from django.contrib.auth import authenticate
 
         user = authenticate(request=request, access_token=token)
         if user is None:
-            return HttpResponseNotAuthorized(
-                attributes={"realm": request.realm.name}
-            )
+            return _unauthorized()
+
         request.user = user
+        return get_response(request)
+
+    return middleware

@@ -1,20 +1,18 @@
-from __future__ import unicode_literals
+"""Refresh the cached well-known + JWKS documents from Keycloak."""
 
+import asyncio
 import logging
 
 from django.core.management.base import BaseCommand
 
-from django_keycloak.models import Realm
-
-import django_keycloak.services.realm
+from django_keycloak import conf
 
 logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
+    help = "Refresh cached Keycloak .well-known and JWKS documents."
 
     def handle(self, *args, **options):
-        for realm in Realm.objects.all():
-            django_keycloak.services.realm.refresh_well_known_oidc(realm=realm)
-            django_keycloak.services.realm.refresh_certs(realm=realm)
-            logger.debug('Refreshed: {}'.format(realm))
+        asyncio.run(conf.refresh_cache())
+        self.stdout.write(self.style.SUCCESS("Keycloak cache refreshed"))

@@ -2,7 +2,7 @@ import logging
 import secrets
 
 from django.conf import settings
-from django.contrib.auth import authenticate, login, logout
+from django.contrib.auth import aauthenticate, alogin, alogout
 from django.http.response import (
     HttpResponseBadRequest,
     HttpResponseRedirect,
@@ -10,7 +10,9 @@ from django.http.response import (
 )
 from django.shortcuts import resolve_url
 from django.urls.base import reverse
-from django.views.generic.base import RedirectView
+from django.views import View
+
+from django_keycloak import conf
 
 logger = logging.getLogger(__name__)
 
@@ -19,44 +21,29 @@ SESSION_STATE_KEY = "oidc_state"
 SESSION_NEXT_PATH_KEY = "oidc_next_path"
 
 
-class Login(RedirectView):
-    def get_redirect_url(self, *args, **kwargs):
+class Login(View):
+    async def get(self, request):
         state = secrets.token_urlsafe(32)
-        redirect_uri = self.request.build_absolute_uri(
+        redirect_uri = request.build_absolute_uri(
             location=reverse("keycloak_login_complete")
         )
 
-        self.request.session[SESSION_STATE_KEY] = state
-        self.request.session[SESSION_NEXT_PATH_KEY] = self.request.GET.get(
-            "next"
+        request.session[SESSION_STATE_KEY] = state
+        request.session[SESSION_NEXT_PATH_KEY] = request.GET.get("next")
+
+        url = conf.build_authorization_url(
+            state=state,
+            redirect_uri=redirect_uri,
+            # 'openid given_name family_name email' produced "invalid_scope"
+            # against newer Keycloak releases; profile + email cover both.
+            scope="openid profile email",
         )
-
-        authorization_url = (
-            self.request.realm.client.openid_api_client.authorization_url(
-                redirect_uri=redirect_uri,
-                # See upstream note: 'openid given_name family_name email'
-                # produced "invalid_scope" against newer Keycloak releases.
-                # https://github.com/oauth2-proxy/oauth2-proxy/issues/1448
-                scope="openid profile email",
-                state=state,
-            )
-        )
-
-        if self.request.realm.server.internal_url:
-            authorization_url = authorization_url.replace(
-                self.request.realm.server.internal_url,
-                self.request.realm.server.url,
-                1,
-            )
-
-        logger.debug(authorization_url)
-        return authorization_url
+        logger.debug("Keycloak authorization URL: %s", url)
+        return HttpResponseRedirect(url)
 
 
-class LoginComplete(RedirectView):
-    def get(self, *args, **kwargs):
-        request = self.request
-
+class LoginComplete(View):
+    async def get(self, request):
         if "error" in request.GET:
             return HttpResponseServerError(request.GET["error"])
 
@@ -73,7 +60,7 @@ class LoginComplete(RedirectView):
             location=reverse("keycloak_login_complete")
         )
 
-        user = authenticate(
+        user = await aauthenticate(
             request=request,
             code=request.GET["code"],
             redirect_uri=redirect_uri,
@@ -81,7 +68,7 @@ class LoginComplete(RedirectView):
         if user is None:
             return HttpResponseRedirect(reverse("keycloak_login"))
 
-        login(request, user)
+        await alogin(request, user)
 
         if settings.LOGIN_REDIRECT_URL:
             return HttpResponseRedirect(
@@ -90,18 +77,20 @@ class LoginComplete(RedirectView):
         return HttpResponseRedirect(next_path or "/")
 
 
-class Logout(RedirectView):
-    def get_redirect_url(self, *args, **kwargs):
-        if hasattr(self.request.user, "oidc_profile"):
-            profile = self.request.user.oidc_profile
-            self.request.realm.client.openid_api_client.logout(
-                profile.refresh_token
-            )
+class Logout(View):
+    async def get(self, request):
+        profile = getattr(await request.auser(), "oidc_profile", None)
+        if profile is not None and profile.refresh_token:
+            try:
+                await conf.keycloak_logout(refresh_token=profile.refresh_token)
+            except Exception as exc:  # noqa: BLE001
+                logger.warning("Keycloak logout failed: %s", exc)
+
             profile.access_token = None
             profile.expires_before = None
             profile.refresh_token = None
             profile.refresh_expires_before = None
-            profile.save(
+            await profile.asave(
                 update_fields=[
                     "access_token",
                     "expires_before",
@@ -110,8 +99,7 @@ class Logout(RedirectView):
                 ]
             )
 
-        logout(self.request)
+        await alogout(request)
 
-        if settings.LOGOUT_REDIRECT_URL:
-            return resolve_url(settings.LOGOUT_REDIRECT_URL)
-        return reverse("keycloak_login")
+        target = settings.LOGOUT_REDIRECT_URL or reverse("keycloak_login")
+        return HttpResponseRedirect(resolve_url(target))

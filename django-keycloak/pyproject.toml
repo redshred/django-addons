@@ -31,7 +31,8 @@ classifiers = [
 ]
 dependencies = [
     "django>=5.1",
-    "python-keycloak-client>=0.2.3",
+    "aiohttp>=3.10",
+    "python-jose[cryptography]>=3.3",
 ]
 
 [project.urls]

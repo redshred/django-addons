@@ -1,3 +1,5 @@
+"""Async OIDC profile management: token exchange, refresh, user upsert."""
+
 import logging
 from datetime import timedelta
 
@@ -5,10 +7,9 @@ from django.apps import apps as django_apps
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.core.exceptions import ImproperlyConfigured
-from django.db import transaction
 from django.utils import timezone
 
-import django_keycloak.services.realm
+from django_keycloak import conf
 from django_keycloak.services.exceptions import TokensExpired
 
 logger = logging.getLogger(__name__)
@@ -31,102 +32,80 @@ def get_openid_connect_profile_model():
         )
 
 
-def get_or_create_from_id_token(client, id_token):
-    """
-    Get or create OpenID Connect profile from given id_token.
-
-    :param django_keycloak.models.Client client:
-    :param str id_token:
-    :rtype: django_keycloak.models.OpenIdConnectProfile
-    """
-    issuer = django_keycloak.services.realm.get_issuer(client.realm)
-
-    id_token_object = client.openid_api_client.decode_token(
-        token=id_token,
-        key=client.realm.certs,
-        algorithms=client.openid_api_client.well_known[
-            "id_token_signing_alg_values_supported"
-        ],
-        issuer=issuer,
-    )
-
-    return update_or_create_user_and_oidc_profile(
-        client=client, id_token_object=id_token_object
-    )
-
-
-def update_or_create_user_and_oidc_profile(client, id_token_object):
-    OpenIdConnectProfileModel = get_openid_connect_profile_model()
-
-    with transaction.atomic():
-        UserModel = get_user_model()
-        email_field_name = UserModel.get_email_field_name()
-        user, _ = UserModel.objects.update_or_create(
-            username=id_token_object["preferred_username"],
-            defaults={
-                email_field_name: id_token_object.get("email", ""),
-                "first_name": id_token_object.get("given_name", ""),
-                "last_name": id_token_object.get("family_name", ""),
-            },
-        )
-
-        oidc_profile, _ = OpenIdConnectProfileModel.objects.update_or_create(
-            sub=id_token_object["sub"],
-            defaults={"realm": client.realm, "user": user},
-        )
-
-    return oidc_profile
-
-
-def update_or_create_from_code(code, client, redirect_uri):
-    """
-    Exchange an authorization code for tokens and link the resulting identity
-    to a Django user.
-
-    https://tools.ietf.org/html/rfc6749#section-4.1.4
-    """
+async def update_or_create_from_code(
+    *, code: str, redirect_uri: str
+) -> "OpenIdConnectProfile":  # noqa: F821
+    """Exchange an authorization code for tokens and link to a Django user."""
     initiate_time = timezone.now()
-    token_response = client.openid_api_client.authorization_code(
+    token_response = await conf.exchange_authorization_code(
         code=code, redirect_uri=redirect_uri
     )
-
-    return _update_or_create(
-        client=client,
-        token_response=token_response,
-        initiate_time=initiate_time,
+    return await _update_or_create(
+        token_response=token_response, initiate_time=initiate_time
     )
 
 
-def _update_or_create(client, token_response, initiate_time):
-    issuer = django_keycloak.services.realm.get_issuer(client.realm)
+async def get_or_create_from_id_token(
+    *, id_token: str
+) -> "OpenIdConnectProfile":  # noqa: F821
+    """Validate a bearer access/id token and link to a Django user."""
+    certs = await conf.get_certs()
+    well_known = await conf.get_well_known_oidc()
+    issuer = await conf.get_issuer()
 
-    token_response_key = (
-        "id_token" if "id_token" in token_response else "access_token"
+    id_token_object = conf.decode_token(
+        id_token, certs=certs, well_known=well_known, issuer=issuer
     )
+    return await _update_or_create_user_and_oidc_profile(id_token_object)
 
-    token_object = client.openid_api_client.decode_token(
-        token=token_response[token_response_key],
-        key=client.realm.certs,
-        algorithms=client.openid_api_client.well_known[
-            "id_token_signing_alg_values_supported"
-        ],
+
+async def _update_or_create(*, token_response: dict, initiate_time):
+    certs = await conf.get_certs()
+    well_known = await conf.get_well_known_oidc()
+    issuer = await conf.get_issuer()
+
+    token_key = "id_token" if "id_token" in token_response else "access_token"
+    token_object = conf.decode_token(
+        token_response[token_key],
+        certs=certs,
+        well_known=well_known,
         issuer=issuer,
         # https://github.com/Peter-Slump/django-keycloak/issues/57
         access_token=token_response["access_token"],
     )
 
-    oidc_profile = update_or_create_user_and_oidc_profile(
-        client=client, id_token_object=token_object
-    )
-
-    return update_tokens(
-        token_model=oidc_profile,
-        token_response=token_response,
-        initiate_time=initiate_time,
+    oidc_profile = await _update_or_create_user_and_oidc_profile(token_object)
+    return await _update_tokens(
+        oidc_profile, token_response=token_response, initiate_time=initiate_time
     )
 
 
-def update_tokens(token_model, token_response, initiate_time):
+async def _update_or_create_user_and_oidc_profile(id_token_object: dict):
+    """
+    Upsert (User, OpenIdConnectProfile). Not atomic: a failure between the
+    two writes leaves a User without a profile, which the next login fixes.
+    Wrapping ``transaction.atomic`` in async requires sync_to_async, which
+    would defeat the point of going async; we accept the trade.
+    """
+    OpenIdConnectProfileModel = get_openid_connect_profile_model()
+    UserModel = get_user_model()
+    email_field = UserModel.get_email_field_name()
+
+    user, _ = await UserModel.objects.aupdate_or_create(
+        username=id_token_object["preferred_username"],
+        defaults={
+            email_field: id_token_object.get("email", ""),
+            "first_name": id_token_object.get("given_name", ""),
+            "last_name": id_token_object.get("family_name", ""),
+        },
+    )
+    oidc_profile, _ = await OpenIdConnectProfileModel.objects.aupdate_or_create(
+        sub=id_token_object["sub"], defaults={"user": user}
+    )
+    return oidc_profile
+
+
+async def _update_tokens(token_model, *, token_response: dict, initiate_time):
     expires_before = initiate_time + timedelta(
         seconds=token_response["expires_in"]
     )
@@ -139,7 +118,7 @@ def update_tokens(token_model, token_response, initiate_time):
     token_model.refresh_token = token_response.get("refresh_token")
     token_model.refresh_expires_before = refresh_expires_before
 
-    token_model.save(
+    await token_model.asave(
         update_fields=[
             "access_token",
             "expires_before",
@@ -150,10 +129,8 @@ def update_tokens(token_model, token_response, initiate_time):
     return token_model
 
 
-def get_active_access_token(oidc_profile):
-    """
-    Return the access token, refreshing it via the refresh token if expired.
-    """
+async def get_active_access_token(oidc_profile) -> str:
+    """Return the access token, refreshing via the refresh token if needed."""
     initiate_time = timezone.now()
 
     if (
@@ -163,29 +140,13 @@ def get_active_access_token(oidc_profile):
         raise TokensExpired()
 
     if initiate_time > oidc_profile.expires_before:
-        token_response = (
-            oidc_profile.realm.client.openid_api_client.refresh_token(
-                refresh_token=oidc_profile.refresh_token
-            )
+        token_response = await conf.refresh_tokens(
+            refresh_token=oidc_profile.refresh_token
         )
-
-        oidc_profile = update_tokens(
-            token_model=oidc_profile,
+        oidc_profile = await _update_tokens(
+            oidc_profile,
             token_response=token_response,
             initiate_time=initiate_time,
         )
 
     return oidc_profile.access_token
-
-
-def get_decoded_jwt(oidc_profile):
-    client = oidc_profile.realm.client
-    active_access_token = get_active_access_token(oidc_profile=oidc_profile)
-
-    return client.openid_api_client.decode_token(
-        token=active_access_token,
-        key=client.realm.certs,
-        algorithms=client.openid_api_client.well_known[
-            "id_token_signing_alg_values_supported"
-        ],
-    )
