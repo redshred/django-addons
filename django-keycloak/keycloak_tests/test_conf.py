@@ -6,7 +6,6 @@ import pytest
 from aioresponses import aioresponses
 from django.core.cache import cache
 from django.test import override_settings
-
 from django_keycloak import conf
 
 
@@ -15,9 +14,7 @@ def test_realm_name_reads_settings():
 
 
 def test_build_authorization_url_includes_required_params():
-    url = conf.build_authorization_url(
-        state="abc123", redirect_uri="https://app/cb", scope="openid profile email"
-    )
+    url = conf.build_authorization_url(state="abc123", redirect_uri="https://app/cb", scope="openid profile email")
     parsed = urlparse(url)
     qs = parse_qs(parsed.query)
 
@@ -33,12 +30,8 @@ def test_build_authorization_url_includes_required_params():
 
 def test_build_authorization_url_uses_public_url_even_with_internal():
     """The browser-facing URL must always point at the public hostname."""
-    with override_settings(
-        KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"
-    ):
-        url = conf.build_authorization_url(
-            state="s", redirect_uri="r", scope="openid"
-        )
+    with override_settings(KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"):
+        url = conf.build_authorization_url(state="s", redirect_uri="r", scope="openid")
     assert url.startswith("https://kc.example.com/")
 
 
@@ -47,9 +40,7 @@ def test_server_to_server_headers_empty_when_urls_match():
 
 
 def test_server_to_server_headers_set_for_internal_url():
-    with override_settings(
-        KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"
-    ):
+    with override_settings(KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"):
         headers = conf._server_to_server_headers()
     assert headers == {"Host": "kc.example.com", "X-Forwarded-Proto": "https"}
 
@@ -89,23 +80,17 @@ async def test_get_issuer_swaps_internal_to_public(well_known):
         "issuer": "http://keycloak:8080/realms/testrealm",
     }
     cache.set("django_keycloak:well_known_oidc", well_known, 3600)
-    with override_settings(
-        KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"
-    ):
+    with override_settings(KEYCLOAK_SERVER_INTERNAL_URL="http://keycloak:8080"):
         issuer = await conf.get_issuer()
     assert issuer == "https://kc.example.com/realms/testrealm"
 
 
 @pytest.mark.asyncio
-async def test_exchange_authorization_code_posts_to_token_endpoint(
-    well_known, token_response
-):
+async def test_exchange_authorization_code_posts_to_token_endpoint(well_known, token_response):
     cache.set("django_keycloak:well_known_oidc", well_known, 3600)
     with aioresponses() as mocked:
         mocked.post(well_known["token_endpoint"], payload=token_response)
-        result = await conf.exchange_authorization_code(
-            code="abc", redirect_uri="https://app/cb"
-        )
+        result = await conf.exchange_authorization_code(code="abc", redirect_uri="https://app/cb")
     assert result == token_response
 
 
@@ -119,12 +104,26 @@ async def test_refresh_tokens_posts_grant_type(well_known, token_response):
 
 
 @pytest.mark.asyncio
-async def test_keycloak_logout_tolerates_4xx(well_known):
+async def test_build_end_session_url_includes_hint_and_redirect(well_known):
     cache.set("django_keycloak:well_known_oidc", well_known, 3600)
-    with aioresponses() as mocked:
-        mocked.post(well_known["end_session_endpoint"], status=400)
-        # Must not raise — stale tokens shouldn't block the user's logout.
-        await conf.keycloak_logout(refresh_token="r")
+    url = await conf.build_end_session_url(
+        id_token_hint="abc.def.ghi",
+        post_logout_redirect_uri="https://app/done",
+    )
+    parsed = urlparse(url)
+    qs = parse_qs(parsed.query)
+    assert parsed.path.endswith("/protocol/openid-connect/logout")
+    assert qs["client_id"] == ["testclient"]
+    assert qs["id_token_hint"] == ["abc.def.ghi"]
+    assert qs["post_logout_redirect_uri"] == ["https://app/done"]
+
+
+@pytest.mark.asyncio
+async def test_build_end_session_url_omits_optional_params(well_known):
+    cache.set("django_keycloak:well_known_oidc", well_known, 3600)
+    url = await conf.build_end_session_url()
+    qs = parse_qs(urlparse(url).query)
+    assert qs == {"client_id": ["testclient"]}
 
 
 @pytest.mark.asyncio

@@ -31,11 +31,7 @@ def well_known():
 
 @pytest.fixture
 def certs():
-    return {
-        "keys": [
-            {"kty": "RSA", "kid": "test-key", "use": "sig", "n": "x", "e": "AQAB"}
-        ]
-    }
+    return {"keys": [{"kty": "RSA", "kid": "test-key", "use": "sig", "n": "x", "e": "AQAB"}]}
 
 
 @pytest.fixture
@@ -96,12 +92,8 @@ def make_profile(transactional_db, django_user_model):
             user=user,
             access_token="acc",
             refresh_token="ref",
-            expires_before=now - timedelta(minutes=1)
-            if expired
-            else now + timedelta(minutes=5),
-            refresh_expires_before=now - timedelta(minutes=1)
-            if refresh_expired
-            else now + timedelta(minutes=30),
+            expires_before=now - timedelta(minutes=1) if expired else now + timedelta(minutes=5),
+            refresh_expires_before=now - timedelta(minutes=1) if refresh_expired else now + timedelta(minutes=30),
         )
 
     return _make

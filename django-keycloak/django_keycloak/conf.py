@@ -77,16 +77,11 @@ async def get_well_known_oidc() -> dict:
         return cached
 
     url = f"{_realm_url()}/.well-known/openid-configuration"
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            url, headers=_server_to_server_headers()
-        ) as resp:
-            resp.raise_for_status()
-            well_known = await resp.json()
+    async with aiohttp.ClientSession() as session, session.get(url, headers=_server_to_server_headers()) as resp:
+        resp.raise_for_status()
+        well_known = await resp.json()
 
-    await sync_to_async(cache.set)(
-        _WELL_KNOWN_CACHE_KEY, well_known, _cache_timeout()
-    )
+    await sync_to_async(cache.set)(_WELL_KNOWN_CACHE_KEY, well_known, _cache_timeout())
     return well_known
 
 
@@ -96,12 +91,12 @@ async def get_certs() -> dict:
         return cached
 
     well_known = await get_well_known_oidc()
-    async with aiohttp.ClientSession() as session:
-        async with session.get(
-            well_known["jwks_uri"], headers=_server_to_server_headers()
-        ) as resp:
-            resp.raise_for_status()
-            certs = await resp.json()
+    async with (
+        aiohttp.ClientSession() as session,
+        session.get(well_known["jwks_uri"], headers=_server_to_server_headers()) as resp,
+    ):
+        resp.raise_for_status()
+        certs = await resp.json()
 
     await sync_to_async(cache.set)(_CERTS_CACHE_KEY, certs, _cache_timeout())
     return certs
@@ -129,10 +124,7 @@ def build_authorization_url(*, state: str, redirect_uri: str, scope: str) -> str
         "scope": scope,
         "state": state,
     }
-    return (
-        f"{_realm_url(internal=False)}/protocol/openid-connect/auth"
-        f"?{urlencode(params)}"
-    )
+    return f"{_realm_url(internal=False)}/protocol/openid-connect/auth?{urlencode(params)}"
 
 
 async def _post_token(data: dict) -> dict:
@@ -142,14 +134,16 @@ async def _post_token(data: dict) -> dict:
         "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
         **data,
     }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
+    async with (
+        aiohttp.ClientSession() as session,
+        session.post(
             well_known["token_endpoint"],
             data=payload,
             headers=_server_to_server_headers(),
-        ) as resp:
-            resp.raise_for_status()
-            return await resp.json()
+        ) as resp,
+    ):
+        resp.raise_for_status()
+        return await resp.json()
 
 
 async def exchange_authorization_code(*, code: str, redirect_uri: str) -> dict:
@@ -163,28 +157,34 @@ async def exchange_authorization_code(*, code: str, redirect_uri: str) -> dict:
 
 
 async def refresh_tokens(*, refresh_token: str) -> dict:
-    return await _post_token(
-        {"grant_type": "refresh_token", "refresh_token": refresh_token}
-    )
+    return await _post_token({"grant_type": "refresh_token", "refresh_token": refresh_token})
 
 
-async def keycloak_logout(*, refresh_token: str) -> None:
+async def build_end_session_url(
+    *,
+    id_token_hint: str | None = None,
+    post_logout_redirect_uri: str | None = None,
+) -> str:
+    """
+    Build the RP-initiated logout URL for browser redirection.
+
+    Per OIDC RP-Initiated Logout 1.0, the relying party redirects the user's
+    browser to ``end_session_endpoint`` with ``id_token_hint`` and
+    ``post_logout_redirect_uri``. Keycloak validates the id_token's signature
+    (it does not need to be unexpired), terminates the SSO session, and
+    redirects the browser back to ``post_logout_redirect_uri`` — which must
+    be registered on the Keycloak client as a valid post-logout redirect URI.
+
+    Replaces the deprecated server-side POST to ``end_session_endpoint`` with
+    ``refresh_token`` (Keycloak >= 18).
+    """
     well_known = await get_well_known_oidc()
-    payload = {
-        "client_id": settings.KEYCLOAK_CLIENT_ID,
-        "client_secret": settings.KEYCLOAK_CLIENT_SECRET,
-        "refresh_token": refresh_token,
-    }
-    async with aiohttp.ClientSession() as session:
-        async with session.post(
-            well_known["end_session_endpoint"],
-            data=payload,
-            headers=_server_to_server_headers(),
-        ) as resp:
-            # Keycloak returns 204 on a clean logout; tolerate 4xx so a
-            # stale token doesn't break the user's logout flow.
-            if resp.status >= 500:
-                resp.raise_for_status()
+    params: dict[str, str] = {"client_id": settings.KEYCLOAK_CLIENT_ID}
+    if id_token_hint:
+        params["id_token_hint"] = id_token_hint
+    if post_logout_redirect_uri:
+        params["post_logout_redirect_uri"] = post_logout_redirect_uri
+    return f"{well_known['end_session_endpoint']}?{urlencode(params)}"
 
 
 def decode_token(
@@ -208,8 +208,6 @@ def decode_token(
 
 async def refresh_cache() -> None:
     """Drop and repopulate the well-known + JWKS caches."""
-    await sync_to_async(cache.delete_many)(
-        [_WELL_KNOWN_CACHE_KEY, _CERTS_CACHE_KEY]
-    )
+    await sync_to_async(cache.delete_many)([_WELL_KNOWN_CACHE_KEY, _CERTS_CACHE_KEY])
     await get_well_known_oidc()
     await get_certs()

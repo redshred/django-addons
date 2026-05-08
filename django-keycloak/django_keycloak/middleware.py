@@ -21,9 +21,7 @@ def KeycloakStatelessBearerAuthenticationMiddleware(get_response):
     async_capable = iscoroutinefunction(get_response)
 
     def _exempt(request) -> bool:
-        exempt_paths = getattr(
-            settings, "KEYCLOAK_BEARER_AUTHENTICATION_EXEMPT_PATHS", None
-        )
+        exempt_paths = getattr(settings, "KEYCLOAK_BEARER_AUTHENTICATION_EXEMPT_PATHS", None)
         if not exempt_paths:
             return False
         path = request.path_info.lstrip("/")
@@ -42,9 +40,7 @@ def KeycloakStatelessBearerAuthenticationMiddleware(get_response):
         return token
 
     def _unauthorized() -> HttpResponseNotAuthorized:
-        return HttpResponseNotAuthorized(
-            attributes={"realm": conf.realm_name()}
-        )
+        return HttpResponseNotAuthorized(attributes={"realm": conf.realm_name()})
 
     if async_capable:
 

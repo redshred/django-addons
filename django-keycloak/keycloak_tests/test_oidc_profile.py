@@ -6,7 +6,6 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-
 from django_keycloak.models import OpenIdConnectProfile
 from django_keycloak.services import oidc_profile as svc
 from django_keycloak.services.exceptions import TokensExpired
@@ -14,9 +13,7 @@ from django_keycloak.services.exceptions import TokensExpired
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-async def test_update_or_create_from_code_creates_user_and_profile(
-    primed_cache, id_token_object, token_response
-):
+async def test_update_or_create_from_code_creates_user_and_profile(primed_cache, id_token_object, token_response):
     with (
         patch.object(
             svc.conf,
@@ -25,9 +22,7 @@ async def test_update_or_create_from_code_creates_user_and_profile(
         ),
         patch.object(svc.conf, "decode_token", return_value=id_token_object),
     ):
-        profile = await svc.update_or_create_from_code(
-            code="abc", redirect_uri="https://app/cb"
-        )
+        profile = await svc.update_or_create_from_code(code="abc", redirect_uri="https://app/cb")
 
     assert profile.sub == "kc-user-1"
     assert profile.access_token == token_response["access_token"]
@@ -39,9 +34,7 @@ async def test_update_or_create_from_code_creates_user_and_profile(
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-async def test_update_or_create_from_code_updates_existing_user(
-    primed_cache, id_token_object, token_response
-):
+async def test_update_or_create_from_code_updates_existing_user(primed_cache, id_token_object, token_response):
     User = get_user_model()
     await User.objects.acreate(username="alice", first_name="OldName")
 
@@ -53,9 +46,7 @@ async def test_update_or_create_from_code_updates_existing_user(
         ),
         patch.object(svc.conf, "decode_token", return_value=id_token_object),
     ):
-        profile = await svc.update_or_create_from_code(
-            code="abc", redirect_uri="https://app/cb"
-        )
+        profile = await svc.update_or_create_from_code(code="abc", redirect_uri="https://app/cb")
 
     await profile.user.arefresh_from_db()
     assert profile.user.first_name == "Alice"
@@ -64,12 +55,8 @@ async def test_update_or_create_from_code_updates_existing_user(
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-async def test_get_or_create_from_id_token_decodes_and_links(
-    primed_cache, id_token_object
-):
-    with patch.object(
-        svc.conf, "decode_token", return_value=id_token_object
-    ) as decode_mock:
+async def test_get_or_create_from_id_token_decodes_and_links(primed_cache, id_token_object):
+    with patch.object(svc.conf, "decode_token", return_value=id_token_object) as decode_mock:
         profile = await svc.get_or_create_from_id_token(id_token="raw-jwt")
 
     assert profile.sub == "kc-user-1"
@@ -86,15 +73,11 @@ async def test_get_active_access_token_returns_existing_when_valid(make_profile)
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-async def test_get_active_access_token_refreshes_when_expired(
-    make_profile, token_response
-):
+async def test_get_active_access_token_refreshes_when_expired(make_profile, token_response):
     profile = await make_profile(expired=True)
 
     refreshed = {**token_response, "access_token": "new-access"}
-    with patch.object(
-        svc.conf, "refresh_tokens", AsyncMock(return_value=refreshed)
-    ) as refresh:
+    with patch.object(svc.conf, "refresh_tokens", AsyncMock(return_value=refreshed)) as refresh:
         token = await svc.get_active_access_token(profile)
 
     refresh.assert_awaited_once_with(refresh_token="ref")

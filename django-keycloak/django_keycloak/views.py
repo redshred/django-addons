@@ -24,9 +24,7 @@ SESSION_NEXT_PATH_KEY = "oidc_next_path"
 class Login(View):
     async def get(self, request):
         state = secrets.token_urlsafe(32)
-        redirect_uri = request.build_absolute_uri(
-            location=reverse("keycloak_login_complete")
-        )
+        redirect_uri = request.build_absolute_uri(location=reverse("keycloak_login_complete"))
 
         request.session[SESSION_STATE_KEY] = state
         request.session[SESSION_NEXT_PATH_KEY] = request.GET.get("next")
@@ -56,9 +54,7 @@ class LoginComplete(View):
         if not expected_state or request.GET["state"] != expected_state:
             return HttpResponseRedirect(reverse("keycloak_login"))
 
-        redirect_uri = request.build_absolute_uri(
-            location=reverse("keycloak_login_complete")
-        )
+        redirect_uri = request.build_absolute_uri(location=reverse("keycloak_login_complete"))
 
         user = await aauthenticate(
             request=request,
@@ -71,35 +67,48 @@ class LoginComplete(View):
         await alogin(request, user)
 
         if settings.LOGIN_REDIRECT_URL:
-            return HttpResponseRedirect(
-                resolve_url(settings.LOGIN_REDIRECT_URL)
-            )
+            return HttpResponseRedirect(resolve_url(settings.LOGIN_REDIRECT_URL))
         return HttpResponseRedirect(next_path or "/")
 
 
 class Logout(View):
     async def get(self, request):
         profile = getattr(await request.auser(), "oidc_profile", None)
-        if profile is not None and profile.refresh_token:
-            try:
-                await conf.keycloak_logout(refresh_token=profile.refresh_token)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("Keycloak logout failed: %s", exc)
-
+        id_token_hint = None
+        if profile is not None:
+            id_token_hint = profile.id_token
             profile.access_token = None
             profile.expires_before = None
             profile.refresh_token = None
             profile.refresh_expires_before = None
+            profile.id_token = None
             await profile.asave(
                 update_fields=[
                     "access_token",
                     "expires_before",
                     "refresh_token",
                     "refresh_expires_before",
+                    "id_token",
                 ]
             )
 
         await alogout(request)
 
-        target = settings.LOGOUT_REDIRECT_URL or reverse("keycloak_login")
-        return HttpResponseRedirect(resolve_url(target))
+        # Where Keycloak should send the browser after terminating the SSO
+        # session. Must be registered on the Keycloak client as a valid
+        # post-logout redirect URI.
+        local_target = settings.LOGOUT_REDIRECT_URL or reverse("keycloak_login")
+        post_logout_redirect_uri = request.build_absolute_uri(location=resolve_url(local_target))
+
+        try:
+            url = await conf.build_end_session_url(
+                id_token_hint=id_token_hint,
+                post_logout_redirect_uri=post_logout_redirect_uri,
+            )
+        except Exception as exc:  # noqa: BLE001
+            # If we can't reach Keycloak's well-known endpoint, fall back to
+            # local-only logout rather than 500ing the user.
+            logger.warning("Keycloak end-session URL unavailable: %s", exc)
+            return HttpResponseRedirect(resolve_url(local_target))
+
+        return HttpResponseRedirect(url)

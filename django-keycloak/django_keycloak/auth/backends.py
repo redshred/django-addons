@@ -20,9 +20,7 @@ class KeycloakAuthorizationBase:
     async def aget_user(self, user_id):
         UserModel = get_user_model()
         try:
-            user = await UserModel.objects.select_related(
-                "oidc_profile"
-            ).aget(pk=user_id)
+            user = await UserModel.objects.select_related("oidc_profile").aget(pk=user_id)
         except UserModel.DoesNotExist:
             return None
 
@@ -49,15 +47,11 @@ class KeycloakAuthorizationCodeBackend(KeycloakAuthorizationBase):
     async def aauthenticate(self, request, code=None, redirect_uri=None):
         if code is None or redirect_uri is None:
             return None
-        oidc_profile = await oidc_profile_service.update_or_create_from_code(
-            code=code, redirect_uri=redirect_uri
-        )
+        oidc_profile = await oidc_profile_service.update_or_create_from_code(code=code, redirect_uri=redirect_uri)
         return oidc_profile.user
 
     def authenticate(self, request, code=None, redirect_uri=None):
-        return async_to_sync(self.aauthenticate)(
-            request, code=code, redirect_uri=redirect_uri
-        )
+        return async_to_sync(self.aauthenticate)(request, code=code, redirect_uri=redirect_uri)
 
 
 class KeycloakIDTokenAuthorizationBackend(KeycloakAuthorizationBase):
@@ -67,11 +61,7 @@ class KeycloakIDTokenAuthorizationBackend(KeycloakAuthorizationBase):
         if access_token is None:
             return None
         try:
-            oidc_profile = (
-                await oidc_profile_service.get_or_create_from_id_token(
-                    id_token=access_token
-                )
-            )
+            oidc_profile = await oidc_profile_service.get_or_create_from_id_token(id_token=access_token)
         except ExpiredSignatureError:
             logger.debug("Bearer auth: access token expired.")
             return None
@@ -84,6 +74,4 @@ class KeycloakIDTokenAuthorizationBackend(KeycloakAuthorizationBase):
         return oidc_profile.user
 
     def authenticate(self, request, access_token=None):
-        return async_to_sync(self.aauthenticate)(
-            request, access_token=access_token
-        )
+        return async_to_sync(self.aauthenticate)(request, access_token=access_token)

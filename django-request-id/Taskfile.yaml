@@ -3,7 +3,7 @@ version: "3"
 
 vars:
   PACKAGE_NAME: request_id
-  DIST_DIR: "{{.ROOT_DIR}}/django-request-id/dist"
+  DIST_DIR: dist
 
 
 tasks:
@@ -52,10 +52,20 @@ tasks:
   build:
     desc: Build sdist and wheel into dist/
     deps: [deps]
-    generates:
-      - "{{.DIST_DIR}}/*"
     cmds:
-      - uv build --out-dir "{{.DIST_DIR}}"
+      - rm -rf {{.DIST_DIR}}
+      - uv build --out-dir {{.DIST_DIR}}
+
+  publish:
+    desc: |-
+      Publish sdist + wheel via `uv publish`. Auth and target are read from
+      the UV_PUBLISH_* env vars: UV_PUBLISH_URL, UV_PUBLISH_USERNAME,
+      UV_PUBLISH_PASSWORD (or UV_PUBLISH_TOKEN). For Google Artifact Registry
+      use UV_PUBLISH_USERNAME=oauth2accesstoken with the gcloud access token
+      as UV_PUBLISH_PASSWORD.
+    deps: [build]
+    cmds:
+      - uv publish {{.DIST_DIR}}/*
 
   demo:
     desc: Run the bundled ASGI demo via uvicorn

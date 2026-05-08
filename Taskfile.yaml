@@ -4,6 +4,11 @@ version: "3"
 vars:
   WORKSPACE_NAME: django-addons
 
+env:
+  UV_PUBLISH_URL: https://us-python.pkg.dev/redshred/python
+  UV_PUBLISH_USERNAME: oauth2accesstoken
+  UV_PUBLISH_PASSWORD:
+    sh: gcloud auth print-access-token
 
 includes:
   request-id:
@@ -63,6 +68,16 @@ tasks:
     cmds:
       - task: request-id:build
       - task: keycloak:build
+
+  publish:
+    desc: |-
+      Publish every workspace member via `uv publish`. Configure auth +
+      target through UV_PUBLISH_* env vars (see the addon-level publish
+      task description). The same task target is used by the GitHub
+      publish workflow.
+    cmds:
+      - task: request-id:publish
+      - task: keycloak:publish
 
   check:
     desc: Run all quality checks (lint + test)

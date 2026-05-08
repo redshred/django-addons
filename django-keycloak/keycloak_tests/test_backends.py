@@ -1,25 +1,18 @@
 """Tests for django_keycloak.auth.backends."""
 
-from datetime import timedelta
 from unittest.mock import AsyncMock, patch
 
 import pytest
-from django.contrib.auth import get_user_model
-from django.utils import timezone
-from jose.exceptions import ExpiredSignatureError, JWTClaimsError, JWTError
-
 from django_keycloak.auth.backends import (
     KeycloakAuthorizationCodeBackend,
     KeycloakIDTokenAuthorizationBackend,
 )
-from django_keycloak.models import OpenIdConnectProfile
+from jose.exceptions import ExpiredSignatureError, JWTClaimsError, JWTError
 
 
 @pytest.mark.django_db(transaction=True)
 @pytest.mark.asyncio
-async def test_authorization_code_backend_returns_user(
-    primed_cache, id_token_object, token_response
-):
+async def test_authorization_code_backend_returns_user(primed_cache, id_token_object, token_response):
     backend = KeycloakAuthorizationCodeBackend()
     with (
         patch(
@@ -31,9 +24,7 @@ async def test_authorization_code_backend_returns_user(
             return_value=id_token_object,
         ),
     ):
-        user = await backend.aauthenticate(
-            request=None, code="abc", redirect_uri="https://app/cb"
-        )
+        user = await backend.aauthenticate(request=None, code="abc", redirect_uri="https://app/cb")
 
     assert user is not None
     assert user.username == "alice"
@@ -43,9 +34,7 @@ async def test_authorization_code_backend_returns_user(
 @pytest.mark.asyncio
 async def test_authorization_code_backend_returns_none_without_code():
     backend = KeycloakAuthorizationCodeBackend()
-    user = await backend.aauthenticate(
-        request=None, code=None, redirect_uri=None
-    )
+    user = await backend.aauthenticate(request=None, code=None, redirect_uri=None)
     assert user is None
 
 
@@ -129,9 +118,7 @@ def test_has_perm_is_noop():
 
 
 @pytest.mark.django_db(transaction=True)
-def test_sync_authenticate_wrapper(
-    primed_cache, id_token_object, token_response
-):
+def test_sync_authenticate_wrapper(primed_cache, id_token_object, token_response):
     """The sync authenticate() wrapper must round-trip through aauthenticate."""
     backend = KeycloakAuthorizationCodeBackend()
     with (
@@ -144,8 +131,6 @@ def test_sync_authenticate_wrapper(
             return_value=id_token_object,
         ),
     ):
-        user = backend.authenticate(
-            request=None, code="abc", redirect_uri="https://app/cb"
-        )
+        user = backend.authenticate(request=None, code="abc", redirect_uri="https://app/cb")
     assert user is not None
     assert user.username == "alice"
