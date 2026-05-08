@@ -1,6 +1,6 @@
 [project]
 name = "django-keycloak"
-version = "1.0.0a1"
+version = "1.0.0a2"
 description = "Async-aware Django integration for Keycloak (Redshred fork of skamansam/django-keycloak)"
 readme = "README.rst"
 license = { file = "LICENSE" }
