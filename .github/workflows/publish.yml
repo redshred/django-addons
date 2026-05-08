@@ -1,0 +1,46 @@
+name: Publish to Artifact Registry
+
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        package:
+          - django-keycloak
+          - django-request-id
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tooling
+        run: python -m pip install --upgrade build twine keyrings.google-artifactregistry-auth
+
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
+
+      - name: Build distribution
+        working-directory: ${{ matrix.package }}
+        run: python -m build
+
+      - name: Publish to Artifact Registry
+        working-directory: ${{ matrix.package }}
+        env:
+          TWINE_REPOSITORY_URL: https://${{ vars.GAR_LOCATION }}-python.pkg.dev/${{ vars.GAR_PROJECT }}/${{ vars.GAR_REPOSITORY }}/
+        run: python -m twine upload --skip-existing --verbose dist/*

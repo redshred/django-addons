@@ -315,7 +315,7 @@ wheels = [
 
 [[package]]
 name = "django-keycloak"
-version = "0.3.0"
+version = "1.0.0a1"
 source = { editable = "django-keycloak" }
 dependencies = [
     { name = "aiohttp" },
