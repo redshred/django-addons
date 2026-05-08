@@ -22,13 +22,13 @@ tasks:
     desc: Run the django-keycloak test suite
     deps: [deps]
     cmds:
-      - uv run --project "{{.ROOT_DIR}}" pytest {{.PACKAGE_NAME}}/tests
+      - uv run --project "{{.ROOT_DIR}}" pytest
 
   test:coverage:
     desc: Run tests with a coverage report
     deps: [deps]
     cmds:
-      - uv run --project "{{.ROOT_DIR}}" --with coverage pytest --cov={{.PACKAGE_NAME}} --cov-report=term-missing {{.PACKAGE_NAME}}/tests
+      - uv run --project "{{.ROOT_DIR}}" --with coverage pytest --cov={{.PACKAGE_NAME}} --cov-report=term-missing
 
   lint:
     desc: Lint django-keycloak sources

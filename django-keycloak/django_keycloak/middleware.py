@@ -2,7 +2,7 @@ import re
 
 from asgiref.sync import iscoroutinefunction
 from django.conf import settings
-from django.contrib.auth import aauthenticate
+from django.contrib.auth import aauthenticate, authenticate
 from django.utils.decorators import sync_and_async_middleware
 
 from django_keycloak import conf
@@ -72,8 +72,6 @@ def KeycloakStatelessBearerAuthenticationMiddleware(get_response):
         token = _extract_token(request)
         if token is None:
             return _unauthorized()
-
-        from django.contrib.auth import authenticate
 
         user = authenticate(request=request, access_token=token)
         if user is None:

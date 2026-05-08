@@ -56,6 +56,7 @@ include = [
 ]
 
 [tool.pytest.ini_options]
-DJANGO_SETTINGS_MODULE = "django_keycloak.tests.settings"
-python_files = ["tests.py", "test_*.py", "*_tests.py"]
-testpaths = ["django_keycloak/tests"]
+DJANGO_SETTINGS_MODULE = "keycloak_tests.settings"
+python_files = ["test_*.py"]
+testpaths = ["keycloak_tests"]
+asyncio_mode = "auto"
